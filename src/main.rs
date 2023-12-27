@@ -1,11 +1,12 @@
 use std::error::Error;
 
 mod logging;
-mod window;
+mod program;
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     logging::setup_logger();
-    window::setup_window()?;
+    program::run().await?;
 
     Ok(())
 }
