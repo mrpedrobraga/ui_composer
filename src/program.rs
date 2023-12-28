@@ -7,9 +7,7 @@ use winit::{
     window::WindowBuilder,
 };
 
-use self::program_state::ProgramState;
-
-pub mod program_state;
+use crate::program_state::ProgramState;
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new();

@@ -5,7 +5,7 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::shaders::formats::Vertex;
 
-pub const MAIN_SHADER: &'static str = include_str!("../shaders/main.wgsl");
+pub const MAIN_SHADER: &'static str = include_str!("./shaders/main.wgsl");
 
 /// Wrapper responsible for holding / handling the program's user interfac
 /// and broadcasting events to the underlying API.

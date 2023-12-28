@@ -5,7 +5,7 @@ pub struct Vec2 {
 }
 
 impl Vec2 {
-    fn new(x: f64, y: f64) {
+    fn new(x: f64, y: f64) -> Self {
         Self { x, y }
     }
 
