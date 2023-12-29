@@ -1,11 +1,20 @@
 use std::error::Error;
 
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
-use winit::{event::WindowEvent, window::Window};
+use winit::{
+    event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
+    window::Window,
+};
 
 use crate::shaders::formats::Vertex;
 
 pub const MAIN_SHADER: &'static str = include_str!("./shaders/main.wgsl");
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct ProgramUniforms {
+    pub val: f32,
+}
 
 /// Wrapper responsible for holding / handling the program's user interfac
 /// and broadcasting events to the underlying API.
@@ -15,7 +24,13 @@ pub struct ProgramState {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub render_pipeline: wgpu::RenderPipeline,
+    pub uniforms: ProgramUniforms,
+    pub uniform_bind_group: wgpu::BindGroup,
+    pub uniform_buffer: wgpu::Buffer,
     pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
+    pub vertex_count: u32,
+    pub index_count: u32,
 
     // Must be dropped *after* `self::surface`.
     // Since the surface refers to it in spite of
@@ -43,10 +58,20 @@ impl ProgramState {
             label: Some("Main Shader"),
             source: wgpu::ShaderSource::Wgsl(MAIN_SHADER.into()),
         });
-        let render_pipeline = create_main_render_pipeline(&device, shader, &config);
 
-        const VERTICES: &[Vertex] = &[];
-        let vertex_buffer = create_vertex_buffer(VERTICES, &device);
+        let uniforms = ProgramUniforms { val: 1.0 };
+        let uniform_buffer = create_uniform_buffer(&uniforms, &device);
+        let uniform_bind_group_layout = create_uniform_bind_group_layout(&device);
+        let uniform_bind_group =
+            create_uniform_bind_group(&uniform_bind_group_layout, &uniform_buffer, &device);
+
+        let (vertex_buffer, index_buffer) =
+            create_vertex_and_index_buffers(get_vertices(), &device);
+        let vertex_count = get_vertices().0.len() as u32;
+        let index_count = get_vertices().1.len() as u32;
+
+        let render_pipeline =
+            create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
         Ok(Self {
             window,
@@ -56,7 +81,13 @@ impl ProgramState {
             config,
             window_size,
             render_pipeline,
+            uniforms,
+            uniform_bind_group,
+            uniform_buffer,
             vertex_buffer,
+            index_buffer,
+            vertex_count,
+            index_count,
         })
     }
 
@@ -77,10 +108,30 @@ impl ProgramState {
 
     /// Returns 'true' if the input was handled successfully.
     pub fn handle_input(&mut self, _event: &WindowEvent) -> bool {
-        false
+        match _event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => self.update(),
+            _ => return false,
+        };
+
+        true
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        self.uniforms.val = 1.0 - self.uniforms.val;
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        )
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let render_target = self.surface.get_current_texture()?;
@@ -115,7 +166,10 @@ impl ProgramState {
         });
 
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.draw(0..3, 0..1);
+        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        render_pass.draw_indexed(0..(self.index_count as u32), 0, 0..1);
 
         drop(render_pass);
 
@@ -126,23 +180,104 @@ impl ProgramState {
     }
 }
 
-fn create_vertex_buffer(vertices: &[Vertex], device: &wgpu::Device) -> wgpu::Buffer {
+fn get_vertices() -> (&'static [Vertex], &'static [u16]) {
+    const VERTICES: &[Vertex] = &[
+        Vertex {
+            position: [-0.5, 0.5, 0.0],
+            color: [0.0, 0.0, 0.0, 1.0],
+        },
+        Vertex {
+            position: [-0.5, -0.5, 0.0],
+            color: [0.0, 1.0, 0.0, 1.0],
+        },
+        Vertex {
+            position: [0.5, -0.5, 0.0],
+            color: [1.0, 1.0, 1.0, 0.0],
+        },
+        Vertex {
+            position: [0.5, 0.5, 0.0],
+            color: [1.0, 0.0, 0.0, 0.0],
+        },
+    ];
+
+    const INDICES: &[u16] = &[0, 1, 2, 3, 0, 2];
+
+    (VERTICES, INDICES)
+}
+
+fn create_uniform_bind_group(
+    layout: &wgpu::BindGroupLayout,
+    buffer: &wgpu::Buffer,
+    device: &wgpu::Device,
+) -> wgpu::BindGroup {
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: buffer.as_entire_binding(),
+        }],
+        label: Some("Main Uniform Bind Group"),
+    });
+
+    bind_group
+}
+
+fn create_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+        label: Some("Main Uniform Bind Group Layout"),
+    });
+
+    layout
+}
+
+fn create_uniform_buffer(uniforms: &ProgramUniforms, device: &wgpu::Device) -> wgpu::Buffer {
+    let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Main Index Buffer"),
+        contents: bytemuck::cast_slice(&[*uniforms]),
+        usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+    });
+
+    uniform_buffer
+}
+
+fn create_vertex_and_index_buffers(
+    data: (&[Vertex], &[u16]),
+    device: &wgpu::Device,
+) -> (wgpu::Buffer, wgpu::Buffer) {
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Main Vertex Buffer"),
-        contents: bytemuck::cast_slice(vertices),
+        contents: bytemuck::cast_slice(data.0),
         usage: wgpu::BufferUsages::VERTEX,
     });
-    vertex_buffer
+
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Main Index Buffer"),
+        contents: bytemuck::cast_slice(data.1),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+
+    (vertex_buffer, index_buffer)
 }
 
 fn create_main_render_pipeline(
     device: &wgpu::Device,
     shader: wgpu::ShaderModule,
     config: &SurfaceConfiguration,
+    uniform_bind_group_layout: wgpu::BindGroupLayout,
 ) -> wgpu::RenderPipeline {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Main Render Pipeline Layout"),
-        bind_group_layouts: &[],
+        bind_group_layouts: &[&uniform_bind_group_layout],
         push_constant_ranges: &[],
     });
 
@@ -152,7 +287,7 @@ fn create_main_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[],
+            buffers: &[Vertex::descriptor()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,

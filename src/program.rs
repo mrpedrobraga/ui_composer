@@ -37,7 +37,7 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
             }
         }
         Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-            state.update();
+            //state.update();
             match state.render() {
                 Ok(_) => {}
                 // Reconfigure surface if it gets lost by calling `resize`.
