@@ -22,7 +22,8 @@ struct Uniforms {
 @group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
-@vertex fn vs_main(
+@vertex
+fn vs_main(
     in: VertexInput
 ) -> VertexOutput {
     var out: VertexOutput;
@@ -33,6 +34,7 @@ var<uniform> uniforms: Uniforms;
     return out;
 }
 
-@fragment fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
+@fragment
+fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
     return vec4<f32>(in.color.rgba);
 }

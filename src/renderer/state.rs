@@ -3,6 +3,7 @@ use std::error::Error;
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
 use winit::{
     event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::ControlFlow,
     window::Window,
 };
 
@@ -14,6 +15,7 @@ use super::{
         get_device, get_surface_format,
     },
     main_shader::{get_main_shader, ProgramUniforms},
+    text::{create_brush, get_example_test_section},
 };
 
 /// Wrapper responsible for holding / handling the program's user interfac
@@ -24,6 +26,7 @@ pub struct ProgramRenderingState {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub render_pipeline: wgpu::RenderPipeline,
+    pub text_brush: wgpu_text::TextBrush<wgpu_text::glyph_brush::ab_glyph::FontArc>,
     pub uniforms: ProgramUniforms,
     pub uniform_bind_group: wgpu::BindGroup,
     pub uniform_buffer: wgpu::Buffer,
@@ -70,6 +73,10 @@ impl ProgramRenderingState {
         let render_pipeline =
             create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
+        // TODO: Text brushes won't be created upon project start,
+        // but when a new font is loaded.
+        let text_brush = create_brush(&device, &config).unwrap();
+
         Ok(Self {
             window,
             surface,
@@ -78,6 +85,7 @@ impl ProgramRenderingState {
             config,
             window_size,
             render_pipeline,
+            text_brush,
             uniforms,
             uniform_bind_group,
             uniform_buffer,
@@ -92,6 +100,10 @@ impl ProgramRenderingState {
         &self.window
     }
 
+    pub fn reconfigure_surface(&mut self) {
+        self.surface.configure(&self.device, &self.config)
+    }
+
     pub fn resize_window(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if !(new_size.width > 0 && new_size.height > 0) {
             return;
@@ -100,12 +112,25 @@ impl ProgramRenderingState {
         self.window_size = new_size;
         self.config.width = new_size.width;
         self.config.height = new_size.height;
-        self.surface.configure(&self.device, &self.config)
+
+        self.text_brush
+            .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
+
+        self.reconfigure_surface()
+    }
+
+    pub fn request_window_redraw(&mut self) {
+        self.window.request_redraw()
     }
 
     /// Returns 'true' if the input was handled successfully.
-    pub fn handle_input(&mut self, _event: &WindowEvent) -> bool {
-        match _event {
+    pub fn handle_input(&mut self, event: &WindowEvent, control_flow: &mut ControlFlow) -> bool {
+        match event {
+            WindowEvent::CloseRequested {} => *control_flow = ControlFlow::Exit,
+            WindowEvent::Resized(physical_size) => self.resize_window(*physical_size),
+            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                self.resize_window(**new_inner_size)
+            }
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -116,7 +141,7 @@ impl ProgramRenderingState {
                 ..
             } => self.update(),
             _ => return false,
-        };
+        }
 
         true
     }
@@ -168,9 +193,19 @@ impl ProgramRenderingState {
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..(self.index_count as u32), 0, 0..1);
 
+        // TODO: Remove this
+        let text_section = get_example_test_section();
+
+        self.text_brush
+            .queue(&self.device, &self.queue, vec![&text_section])
+            .unwrap();
+
+        self.text_brush.draw(&mut render_pass);
+
         drop(render_pass);
 
         self.queue.submit(std::iter::once(cmd_encoder.finish()));
+
         render_target.present();
 
         Ok(())
