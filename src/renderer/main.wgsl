@@ -27,12 +27,12 @@ var<uniform> uniforms: Uniforms;
 ) -> VertexOutput {
     var out: VertexOutput;
 
-    out.clip_space_position = vec4(in.position, 1.0);
+    out.clip_space_position = vec4(in.position + uniforms.val * 0.4, 1.0);
     out.color = in.color;
 
     return out;
 }
 
 @fragment fn fs_main(in: FragmentInput) -> @location(0) vec4<f32> {
-    return vec4<f32>(uniforms.val, in.color.gba);
+    return vec4<f32>(in.color.rgba);
 }

@@ -6,19 +6,19 @@ use winit::{
     window::Window,
 };
 
-use crate::shaders::formats::Vertex;
+use crate::renderer::formats::Vertex;
 
-pub const MAIN_SHADER: &'static str = include_str!("./shaders/main.wgsl");
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct ProgramUniforms {
-    pub val: f32,
-}
+use super::{
+    device::{
+        create_instance, create_surface, get_adapter, get_default_surface_configuration,
+        get_device, get_surface_format,
+    },
+    main_shader::{get_main_shader, ProgramUniforms},
+};
 
 /// Wrapper responsible for holding / handling the program's user interfac
 /// and broadcasting events to the underlying API.
-pub struct ProgramState {
+pub struct ProgramRenderingState {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -39,7 +39,7 @@ pub struct ProgramState {
     pub window_size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl ProgramState {
+impl ProgramRenderingState {
     pub async fn new(window: Window) -> Result<Self, Box<dyn Error>> {
         let window_size = window.inner_size();
         let instance = create_instance();
@@ -54,10 +54,7 @@ impl ProgramState {
         let config =
             get_default_surface_configuration(surface_format, window_size, surface_capabilities);
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Main Shader"),
-            source: wgpu::ShaderSource::Wgsl(MAIN_SHADER.into()),
-        });
+        let shader = device.create_shader_module(get_main_shader());
 
         let uniforms = ProgramUniforms { val: 1.0 };
         let uniform_buffer = create_uniform_buffer(&uniforms, &device);
@@ -226,7 +223,7 @@ fn create_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLay
     let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         entries: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
-            visibility: wgpu::ShaderStages::FRAGMENT,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
             ty: wgpu::BindingType::Buffer {
                 ty: wgpu::BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -316,82 +313,4 @@ fn create_main_render_pipeline(
         multiview: None,
     });
     render_pipeline
-}
-
-fn get_default_surface_configuration(
-    surface_format: wgpu::TextureFormat,
-    window_size: winit::dpi::PhysicalSize<u32>,
-    surface_capabilities: wgpu::SurfaceCapabilities,
-) -> SurfaceConfiguration {
-    let config = wgpu::SurfaceConfiguration {
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        format: surface_format,
-        // INFO: `width` and `height` can never be 0, otherwise the program
-        // might crash unexpectedly.
-        width: window_size.width,
-        height: window_size.height,
-        // TODO: This will be choosable by the user futurely.
-        present_mode: surface_capabilities.present_modes[0],
-        alpha_mode: surface_capabilities.alpha_modes[0],
-        view_formats: Vec::new(),
-    };
-    config
-}
-
-fn get_surface_format(surface_capabilities: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
-    let surface_format = surface_capabilities
-        .formats
-        .iter()
-        .copied()
-        .filter(|f| f.is_srgb())
-        .next()
-        .unwrap_or(surface_capabilities.formats[0]);
-    surface_format
-}
-
-async fn get_device(
-    adapter: &wgpu::Adapter,
-) -> Result<(wgpu::Device, wgpu::Queue), Box<dyn Error>> {
-    let (device, queue) = adapter
-        .request_device(
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
-                label: None,
-            },
-            None,
-        )
-        .await?;
-    Ok((device, queue))
-}
-
-async fn get_adapter(instance: wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptionsBase {
-            power_preference: wgpu::PowerPreference::default(),
-            force_fallback_adapter: false,
-            compatible_surface: Some(surface),
-        })
-        .await;
-    let adapter = match adapter {
-        Some(v) => v,
-        None => todo!(),
-    };
-    adapter
-}
-
-fn create_surface(
-    instance: &wgpu::Instance,
-    window: &Window,
-) -> Result<wgpu::Surface, Box<dyn Error>> {
-    let surface = unsafe { instance.create_surface(window) }?;
-    Ok(surface)
-}
-
-fn create_instance() -> wgpu::Instance {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::all(),
-        ..Default::default()
-    });
-    instance
 }

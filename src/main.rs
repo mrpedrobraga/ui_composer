@@ -2,8 +2,7 @@ use std::error::Error;
 
 mod logging;
 mod program;
-mod program_state;
-mod shaders;
+mod renderer;
 mod ui;
 
 #[tokio::main]
