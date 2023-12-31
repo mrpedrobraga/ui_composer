@@ -15,7 +15,7 @@ use super::{
         get_device, get_surface_format,
     },
     main_shader::{get_main_shader, ProgramUniforms},
-    text::{create_text_renderer, TextRenderer},
+    text::TextRenderer,
 };
 
 /// Wrapper responsible for holding / handling the program's user interfac
@@ -74,7 +74,7 @@ impl ProgramRenderingState {
         let render_pipeline =
             create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
-        let text_renderer = create_text_renderer(&device, &queue, surface_format);
+        let text_renderer = TextRenderer::new(&device, &queue, surface_format);
 
         Ok(Self {
             window,
@@ -175,9 +175,9 @@ impl ProgramRenderingState {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.0,
-                        g: 0.3,
-                        b: 0.6,
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
