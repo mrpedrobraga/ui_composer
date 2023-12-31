@@ -29,22 +29,12 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         }
 
         Event::RedrawRequested(window_id) if window_id == render_state.window().id() => {
-            redraw_requested(&mut render_state, control_flow);
+            render_state.request_redraw(control_flow);
         }
 
         //Event::MainEventsCleared => render_state.request_window_redraw(),
         _ => {}
     })
-}
-
-fn redraw_requested(render_state: &mut ProgramRenderingState, control_flow: &mut ControlFlow) {
-    match render_state.render() {
-        Ok(_) => {}
-        Err(wgpu::SurfaceError::Lost) => render_state.reconfigure_surface(),
-        // Perhaps this can be better handled?
-        Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-        Err(e) => eprintln!("{:?}", e),
-    }
 }
 
 fn make_main_window() -> WindowBuilder {

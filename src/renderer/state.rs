@@ -15,7 +15,7 @@ use super::{
         get_device, get_surface_format,
     },
     main_shader::{get_main_shader, ProgramUniforms},
-    text::{create_brush, get_example_test_section},
+    text::{create_text_renderer, TextRenderer},
 };
 
 /// Wrapper responsible for holding / handling the program's user interfac
@@ -26,7 +26,6 @@ pub struct ProgramRenderingState {
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub render_pipeline: wgpu::RenderPipeline,
-    pub text_brush: wgpu_text::TextBrush<wgpu_text::glyph_brush::ab_glyph::FontArc>,
     pub uniforms: ProgramUniforms,
     pub uniform_bind_group: wgpu::BindGroup,
     pub uniform_buffer: wgpu::Buffer,
@@ -34,6 +33,8 @@ pub struct ProgramRenderingState {
     pub index_buffer: wgpu::Buffer,
     pub vertex_count: u32,
     pub index_count: u32,
+
+    pub text_renderer: TextRenderer,
 
     // Must be dropped *after* `self::surface`.
     // Since the surface refers to it in spite of
@@ -73,9 +74,7 @@ impl ProgramRenderingState {
         let render_pipeline =
             create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
-        // TODO: Text brushes won't be created upon project start,
-        // but when a new font is loaded.
-        let text_brush = create_brush(&device, &config).unwrap();
+        let text_renderer = create_text_renderer(&device, &queue, surface_format);
 
         Ok(Self {
             window,
@@ -85,7 +84,6 @@ impl ProgramRenderingState {
             config,
             window_size,
             render_pipeline,
-            text_brush,
             uniforms,
             uniform_bind_group,
             uniform_buffer,
@@ -93,6 +91,7 @@ impl ProgramRenderingState {
             index_buffer,
             vertex_count,
             index_count,
+            text_renderer,
         })
     }
 
@@ -112,9 +111,6 @@ impl ProgramRenderingState {
         self.window_size = new_size;
         self.config.width = new_size.width;
         self.config.height = new_size.height;
-
-        self.text_brush
-            .resize_view(new_size.width as f32, new_size.height as f32, &self.queue);
 
         self.reconfigure_surface()
     }
@@ -152,7 +148,8 @@ impl ProgramRenderingState {
             &self.uniform_buffer,
             0,
             bytemuck::cast_slice(&[self.uniforms]),
-        )
+        );
+        let _ = self.render();
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -166,6 +163,10 @@ impl ProgramRenderingState {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+        {
+            self.text_renderer
+                .prepare(&self.window, &self.queue, &self.device, &self.config);
+        }
 
         let mut render_pass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
@@ -193,14 +194,11 @@ impl ProgramRenderingState {
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.draw_indexed(0..(self.index_count as u32), 0, 0..1);
 
-        // TODO: Remove this
-        let text_section = get_example_test_section();
+        /* Here, many other things can be plugged in to draw */
 
-        self.text_brush
-            .queue(&self.device, &self.queue, vec![&text_section])
-            .unwrap();
-
-        self.text_brush.draw(&mut render_pass);
+        // TODO: Handle text rendering error!
+        let _ = self.text_renderer.render(&mut render_pass);
+        /* Pluging space end */
 
         drop(render_pass);
 
@@ -209,6 +207,16 @@ impl ProgramRenderingState {
         render_target.present();
 
         Ok(())
+    }
+
+    pub fn request_redraw(&mut self, control_flow: &mut ControlFlow) {
+        match self.render() {
+            Ok(_) => {}
+            Err(wgpu::SurfaceError::Lost) => self.reconfigure_surface(),
+            // Perhaps this can be better handled?
+            Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+            Err(e) => eprintln!("{:?}", e),
+        }
     }
 }
 

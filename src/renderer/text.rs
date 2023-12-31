@@ -1,34 +1,92 @@
-use wgpu::Color;
-use wgpu_text::{
-    glyph_brush::{
-        ab_glyph::{FontArc, InvalidFont},
-        Layout, OwnedSection, Section, Text,
-    },
-    BrushBuilder, TextBrush,
+use glyphon::{
+    Attrs, Color, FontSystem, Metrics, Resolution, SwashCache, TextArea, TextAtlas, TextBounds,
+    TextRenderer as GTextRenderer,
 };
 
-const FONT: &[u8; 647344] = include_bytes!("../../assets/fonts/SourceSans.ttf");
+const TEST_FONT: &[u8; 647344] = include_bytes!("../../assets/fonts/SourceSans.ttf");
 
-pub fn create_brush(
-    device: &wgpu::Device,
-    config: &wgpu::SurfaceConfiguration,
-) -> Result<TextBrush, InvalidFont> {
-    let fa = FontArc::try_from_slice(FONT)?;
-    let b = BrushBuilder::using_font(fa).build(device, config.width, config.height, config.format);
-    Ok(b)
+pub struct TextRenderer {
+    gtext_renderer: GTextRenderer,
+    cache: SwashCache,
+    atlas: TextAtlas,
+    font_system: FontSystem,
 }
 
-pub fn get_example_test_section() -> OwnedSection {
-    let scale = 64.0;
-    Section::default()
-        .add_text(Text::new("Hey there").with_scale(scale))
-        .add_text(
-            Text::new(" benichi")
-                .with_scale(scale)
-                .with_color([1.0, 1.0, 1.0, 1.0]),
-        )
-        .add_text(Text::new("!!!").with_scale(scale))
-        .with_layout(Layout::default().v_align(wgpu_text::glyph_brush::VerticalAlign::Top))
-        .with_screen_position((32.0, 32.0))
-        .to_owned()
+impl TextRenderer {
+    pub fn prepare(
+        &mut self,
+        window: &winit::window::Window,
+        queue: &wgpu::Queue,
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+    ) {
+        let size = window.inner_size();
+        let font_size = 16.0;
+        let line_height = 1.2 * font_size;
+
+        let mut buffer =
+            glyphon::Buffer::new(&mut self.font_system, Metrics::new(font_size, line_height));
+
+        buffer.set_size(&mut self.font_system, size.width as f32, size.height as f32);
+        buffer.set_text(
+            &mut self.font_system,
+            "Finally, some good text rendering!\nمرحبًا بكم 😊!\nHere's another emojo: 🎁.",
+            Attrs::new().family(glyphon::Family::SansSerif),
+            glyphon::Shaping::Advanced,
+        );
+        buffer.shape_until_scroll(&mut self.font_system);
+
+        let text_areas = [TextArea {
+            buffer: &buffer,
+            left: 0.0,
+            top: 0.0,
+            scale: 1.0,
+            bounds: TextBounds {
+                left: 0,
+                top: 0,
+                right: 640,
+                bottom: 360,
+            },
+            default_color: Color::rgb(255, 255, 255),
+        }];
+
+        let _ = self.gtext_renderer.prepare(
+            device,
+            queue,
+            &mut self.font_system,
+            &mut self.atlas,
+            Resolution {
+                width: config.width,
+                height: config.height,
+            },
+            text_areas,
+            &mut self.cache,
+        );
+    }
+
+    pub fn render<'a>(
+        &'a self,
+        render_pass: &mut wgpu::RenderPass<'a>,
+    ) -> Result<(), glyphon::RenderError> {
+        self.gtext_renderer.render(&self.atlas, render_pass)
+    }
+}
+
+pub fn create_text_renderer(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    swapchain_format: wgpu::TextureFormat,
+) -> TextRenderer {
+    let font_system = FontSystem::new();
+    let cache = SwashCache::new();
+    let mut atlas: TextAtlas = TextAtlas::new(device, queue, swapchain_format);
+    let text_renderer =
+        GTextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+
+    TextRenderer {
+        gtext_renderer: text_renderer,
+        atlas,
+        cache,
+        font_system,
+    }
 }
