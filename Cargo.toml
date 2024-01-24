@@ -3,13 +3,10 @@ name = "overtone-gui"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.74.0"
-description = "An API for creation and management of rich (as in rich-text) musical-ish projects."
+description = "A cross-platform library for creation of native user interfaces/graphics using a tasteful combination of procedural and functional-reactive programming."
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/mrpedrobraga/overtone"
-categories = ["data-structures"]
-keywords = ["overtone", "music", "daw", "composition"]
-
+repository = "https://github.com/mrpedrobraga/overtone-gui"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

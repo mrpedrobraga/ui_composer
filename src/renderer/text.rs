@@ -3,7 +3,7 @@ use glyphon::{
     TextRenderer as GTextRenderer, Weight,
 };
 
-const TEST_FONT: &[u8; 647344] = include_bytes!("../../assets/fonts/SourceSans.ttf");
+const TEST_FONT: &[u8; 15920] = include_bytes!("../../assets/fonts/Nayten Sans.ttf");
 
 pub struct TextRenderer {
     gtext_renderer: GTextRenderer,
@@ -21,7 +21,7 @@ impl TextRenderer {
         let mut font_system = FontSystem::new();
 
         font_system.db_mut().load_font_data(TEST_FONT.into());
-        font_system.db_mut().set_sans_serif_family("Source Sans 3");
+        font_system.db_mut().set_sans_serif_family("Nayten Sans Regular");
 
         let cache = SwashCache::new();
         let mut atlas: TextAtlas = TextAtlas::new(device, queue, swapchain_format);
@@ -53,7 +53,7 @@ impl TextRenderer {
         buffer.set_size(&mut self.font_system, size.width as f32, size.height as f32);
         buffer.set_text(
             &mut self.font_system,
-            "Lorem ipsum.",
+            "Modern GUI...",
             Attrs::new()
                 .family(glyphon::Family::SansSerif)
                 .weight(Weight::BOLD)
