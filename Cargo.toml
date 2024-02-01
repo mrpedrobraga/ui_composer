@@ -1,12 +1,12 @@
 [package]
-name = "overtone-gui"
+name = "ui-composer"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.74.0"
 description = "A cross-platform library for creation of native user interfaces/graphics using a tasteful combination of procedural and functional-reactive programming."
 readme = "README.md"
 license = "MIT"
-repository = "https://github.com/mrpedrobraga/overtone-gui"
+repository = "https://github.com/mrpedrobraga/ui-composer"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,7 +18,7 @@ log = "0.4"
 wgpu = "0.18"
 tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1.12", features = ["derive"] }
-glyphon = { path = "../glyphon" }
+glyphon = { version = "*" }
 
 [profile.dev]
 opt-level = 1
