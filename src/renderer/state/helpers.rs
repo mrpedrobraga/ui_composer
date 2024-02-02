@@ -1,7 +1,6 @@
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
 
-use crate::renderer::{formats::Vertex, main_shader::ProgramUniforms};
-
+use crate::renderer::{formats::vertex::Vertex, main_shader::ProgramUniforms};
 
 pub fn create_uniform_bind_group(
     layout: &wgpu::BindGroupLayout,

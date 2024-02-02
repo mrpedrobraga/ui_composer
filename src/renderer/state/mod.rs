@@ -1,17 +1,10 @@
-pub mod helpers;
 pub mod content;
+pub mod helpers;
 
-use helpers::*;
 use content::*;
+use helpers::*;
 use std::error::Error;
 
-use wgpu::{util::DeviceExt, SurfaceConfiguration};
-use winit::{
-    event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::ControlFlow,
-    window::Window,
-};
-use crate::renderer::formats::Vertex;
 use super::{
     device::{
         create_instance, create_surface, get_adapter, get_default_surface_configuration,
@@ -19,6 +12,11 @@ use super::{
     },
     main_shader::{get_main_shader, ProgramUniforms},
     text::TextRenderer,
+};
+use winit::{
+    event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
+    event_loop::ControlFlow,
+    window::Window,
 };
 
 /// Wrapper responsible for holding / handling the program's user interfac

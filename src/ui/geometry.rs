@@ -1,6 +1,6 @@
 /// Direction of flow, taking into account locales.
 #[derive(Debug)]
-pub enum UIFlowDirection {
+pub enum FlowDirection {
     Forward,
     Backward,
     Horizontal,
@@ -15,7 +15,7 @@ pub enum UIFlowDirection {
 
 #[derive(Debug)]
 pub enum UIVector {
-    Embedded(VectorEmbedded),
+    InFlow(VectorEmbedded),
     Cartesian(VectorCartesian),
 }
 

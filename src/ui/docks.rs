@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use super::{ui_types::UIFlowDirection, utils::RefStr};
+use super::{geometry::FlowDirection, utils::RefStr};
 
 #[derive(Debug)]
 pub enum UIFragment {
@@ -22,7 +22,7 @@ pub struct Workspace<'a> {
 
 #[derive(Debug)]
 pub struct UIFragmentList {
-    pub direction: UIFlowDirection,
+    pub direction: FlowDirection,
     pub list: Vec<UIFragment>,
 }
 

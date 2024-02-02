@@ -21,7 +21,9 @@ impl TextRenderer {
         let mut font_system = FontSystem::new();
 
         font_system.db_mut().load_font_data(TEST_FONT.into());
-        font_system.db_mut().set_sans_serif_family("Nayten Sans Regular");
+        font_system
+            .db_mut()
+            .set_sans_serif_family("Nayten Sans Regular");
 
         let cache = SwashCache::new();
         let mut atlas: TextAtlas = TextAtlas::new(device, queue, swapchain_format);
@@ -53,7 +55,7 @@ impl TextRenderer {
         buffer.set_size(&mut self.font_system, size.width as f32, size.height as f32);
         buffer.set_text(
             &mut self.font_system,
-            "Modern GUI...",
+            "Isn't is such a beautiful night?",
             Attrs::new()
                 .family(glyphon::Family::SansSerif)
                 .weight(Weight::BOLD)

@@ -1,5 +1,4 @@
-use crate::renderer::formats::Vertex;
-
+use crate::renderer::formats::vertex::Vertex;
 
 pub fn get_vertices() -> (&'static [Vertex], &'static [u16]) {
     const VERTICES: &[Vertex] = &[
