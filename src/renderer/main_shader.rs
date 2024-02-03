@@ -8,5 +8,5 @@ pub fn get_main_shader() -> wgpu::ShaderModuleDescriptor<'static> {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ProgramUniforms {
-    pub val: f32,
+    pub window_size: [f32; 4],
 }

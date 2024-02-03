@@ -1,6 +1,9 @@
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
 
-use crate::renderer::{formats::vertex::Vertex, main_shader::ProgramUniforms};
+use crate::renderer::{
+    formats::vertex::{InstanceData, Vertex},
+    main_shader::ProgramUniforms,
+};
 
 pub fn create_uniform_bind_group(
     layout: &wgpu::BindGroupLayout,
@@ -47,10 +50,10 @@ pub fn create_uniform_buffer(uniforms: &ProgramUniforms, device: &wgpu::Device) 
     uniform_buffer
 }
 
-pub fn create_vertex_and_index_buffers(
-    data: (&[Vertex], &[u16]),
+pub fn create_test_buffers(
+    data: (&[Vertex], &[u16], &[InstanceData]),
     device: &wgpu::Device,
-) -> (wgpu::Buffer, wgpu::Buffer) {
+) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Main Vertex Buffer"),
         contents: bytemuck::cast_slice(data.0),
@@ -63,7 +66,13 @@ pub fn create_vertex_and_index_buffers(
         usage: wgpu::BufferUsages::INDEX,
     });
 
-    (vertex_buffer, index_buffer)
+    let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Main Instance Buffer"),
+        contents: bytemuck::cast_slice(data.2),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+
+    (vertex_buffer, index_buffer, instance_buffer)
 }
 
 pub fn create_main_render_pipeline(
@@ -84,7 +93,7 @@ pub fn create_main_render_pipeline(
         vertex: wgpu::VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[Vertex::descriptor()],
+            buffers: &[Vertex::descriptor(), InstanceData::descriptor()],
         },
         fragment: Some(wgpu::FragmentState {
             module: &shader,
@@ -98,8 +107,8 @@ pub fn create_main_render_pipeline(
         primitive: wgpu::PrimitiveState {
             topology: wgpu::PrimitiveTopology::TriangleList,
             strip_index_format: None,
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: Some(wgpu::Face::Back),
+            front_face: wgpu::FrontFace::Cw,
+            cull_mode: None,
             polygon_mode: wgpu::PolygonMode::Fill,
             unclipped_depth: false,
             conservative: false,

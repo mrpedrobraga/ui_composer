@@ -1,5 +1,6 @@
 use std::error::Error;
 
+/// Retrieves a wgpu instance.
 pub fn create_instance() -> wgpu::Instance {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
@@ -8,6 +9,7 @@ pub fn create_instance() -> wgpu::Instance {
     instance
 }
 
+/// Returns a default wgpu device.
 pub async fn get_device(
     adapter: &wgpu::Adapter,
 ) -> Result<(wgpu::Device, wgpu::Queue), Box<dyn Error>> {
@@ -24,6 +26,8 @@ pub async fn get_device(
     Ok((device, queue))
 }
 
+/// Returns some random adapter.
+/// TODO: Allow the user to choose this themselves.
 pub async fn get_adapter(instance: wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptionsBase {
@@ -39,6 +43,7 @@ pub async fn get_adapter(instance: wgpu::Instance, surface: &wgpu::Surface) -> w
     adapter
 }
 
+/// Creates a new wgpu surface.
 pub fn create_surface(
     instance: &wgpu::Instance,
     window: &winit::window::Window,
@@ -47,6 +52,8 @@ pub fn create_surface(
     Ok(surface)
 }
 
+/// Gets a surface configuration.
+/// TODO: Allow the user to decide on their if they want.
 pub fn get_default_surface_configuration(
     surface_format: wgpu::TextureFormat,
     window_size: winit::dpi::PhysicalSize<u32>,
@@ -67,6 +74,7 @@ pub fn get_default_surface_configuration(
     config
 }
 
+/// Retrieves the swapchain format.
 pub fn get_surface_format(surface_capabilities: &wgpu::SurfaceCapabilities) -> wgpu::TextureFormat {
     let surface_format = surface_capabilities
         .formats
