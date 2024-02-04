@@ -24,7 +24,11 @@ struct FragmentInput {
 };
 
 struct Uniforms {
-    window_size: vec4<f32>
+    wgpu_to_pix_0: vec4<f32>,
+    wgpu_to_pix_1: vec4<f32>,
+    wgpu_to_pix_2: vec4<f32>,
+    wgpu_to_pix_3: vec4<f32>,
+    camera_position: vec4<f32>
 }
 
 @group(0) @binding(0)
@@ -45,13 +49,10 @@ fn vs_main(
     );
 
     let wgpu_to_px = mat4x4<f32>(
-        vec4(2.0 / uniforms.window_size.x, 0.0, 0.0, 0.0),
-        vec4(0.0, -2.0 / uniforms.window_size.y, 0.0, 0.0),
-        vec4(0.0, 0.0, 1.0, 0.0),
-        vec4(-1.0, 1.0, 0.0, 1.0)
+        uniforms.wgpu_to_pix_0, uniforms.wgpu_to_pix_1, uniforms.wgpu_to_pix_2, uniforms.wgpu_to_pix_3
     );
 
-    var screen_position = wgpu_to_px * transform * vec4<f32>(in.position, 1.0);
+    var screen_position = wgpu_to_px * (transform * vec4<f32>(in.position, 1.0) - uniforms.camera_position);
     out.clip_space_position = screen_position;
     out.color = idata.i_color;
 

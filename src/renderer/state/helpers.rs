@@ -51,7 +51,7 @@ pub fn create_uniform_buffer(uniforms: &ProgramUniforms, device: &wgpu::Device) 
 }
 
 pub fn create_test_buffers(
-    data: (&[Vertex], &[u16], &[InstanceData]),
+    data: &(&[Vertex], &[u16], Vec<InstanceData>),
     device: &wgpu::Device,
 ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -68,7 +68,7 @@ pub fn create_test_buffers(
 
     let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Main Instance Buffer"),
-        contents: bytemuck::cast_slice(data.2),
+        contents: bytemuck::cast_slice(&data.2[..]),
         usage: wgpu::BufferUsages::VERTEX,
     });
 

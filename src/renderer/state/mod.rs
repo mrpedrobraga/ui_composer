@@ -60,7 +60,8 @@ impl ProgramRenderingState {
             get_default_surface_configuration(surface_format, window_size, surface_capabilities);
         let shader = device.create_shader_module(get_main_shader());
         let uniforms = ProgramUniforms {
-            window_size: [640.0, 360.0, 1.0, 1.0],
+            window_size: [[0.0; 4]; 4],
+            camera_position: [0.0, 0.0, 0.0, 0.0],
         };
         let uniform_buffer = create_uniform_buffer(&uniforms, &device);
         let uniform_bind_group_layout = create_uniform_bind_group_layout(&device);
@@ -68,7 +69,7 @@ impl ProgramRenderingState {
             create_uniform_bind_group(&uniform_bind_group_layout, &uniform_buffer, &device);
         let test_render_data = get_vertices();
         let (vertex_buffer, index_buffer, instance_buffer) =
-            create_test_buffers(test_render_data, &device);
+            create_test_buffers(&test_render_data, &device);
         let vertex_count = test_render_data.0.len() as u32;
         let index_count = test_render_data.1.len() as u32;
         let instance_count = test_render_data.2.len() as u32;
@@ -138,6 +139,54 @@ impl ProgramRenderingState {
                     },
                 ..
             } => self.update(),
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Left),
+                        ..
+                    },
+                ..
+            } => {
+                self.global_uniforms.camera_position[0] -= 16.0;
+                self.update();
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Right),
+                        ..
+                    },
+                ..
+            } => {
+                self.global_uniforms.camera_position[0] += 16.0;
+                self.update();
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Up),
+                        ..
+                    },
+                ..
+            } => {
+                self.global_uniforms.camera_position[1] -= 16.0;
+                self.update();
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Down),
+                        ..
+                    },
+                ..
+            } => {
+                self.global_uniforms.camera_position[1] += 16.0;
+                self.update();
+            }
             _ => return false,
         }
 
@@ -156,13 +205,17 @@ impl ProgramRenderingState {
         let _ = self.render();
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.global_uniforms.window_size = [
-            self.window.inner_size().width as f32,
-            self.window.inner_size().height as f32,
-            1.0,
-            1.0,
+    pub fn calc_wgpu_to_px_matrix(&self) -> [[f32; 4]; 4] {
+        return [
+            [2.0 / self.window_size.width as f32, 0.0, 0.0, 0.0],
+            [0.0, -2.0 / self.window_size.height as f32, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [-1.0, 1.0, 0.0, 1.],
         ];
+    }
+
+    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        self.global_uniforms.window_size = self.calc_wgpu_to_px_matrix();
         self.send_uniforms();
 
         let render_target = self.surface.get_current_texture()?;
@@ -191,9 +244,9 @@ impl ProgramRenderingState {
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.1,
-                        b: 0.1,
+                        r: 0.02,
+                        g: 0.02,
+                        b: 0.02,
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
@@ -213,7 +266,7 @@ impl ProgramRenderingState {
         render_pass.draw_indexed(0..(self.index_count as _), 0, 0..(self.instance_count as _));
         /* Here, many other things can be plugged in to draw */
         // TODO: Handle text rendering error!
-        // let _ = self.text_renderer.render(&mut render_pass);
+        let _ = self.text_renderer.render(&mut render_pass);
         /* Pluging space end */
 
         drop(render_pass);

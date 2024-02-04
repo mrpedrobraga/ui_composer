@@ -18,6 +18,13 @@ wgpu = "0.18"
 tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1.12", features = ["derive"] }
 glyphon = { version = "*" }
+rand = "0.8.5"
+
+[lib]
+crate-type = ["dylib", "rlib"]
+
+[build]
+rustflags = ["-C", "prefer-dynamic", "-C", "rpath"]
 
 [profile.dev]
 opt-level = 1

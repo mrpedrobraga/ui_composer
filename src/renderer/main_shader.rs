@@ -8,5 +8,6 @@ pub fn get_main_shader() -> wgpu::ShaderModuleDescriptor<'static> {
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ProgramUniforms {
-    pub window_size: [f32; 4],
+    pub window_size: [[f32; 4]; 4],
+    pub camera_position: [f32; 4],
 }

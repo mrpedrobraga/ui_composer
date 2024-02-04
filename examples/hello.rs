@@ -3,7 +3,7 @@ use std::error::Error;
 use ui_composer::renderer::state::ProgramRenderingState;
 use winit::{dpi::LogicalSize, event::Event, event_loop::EventLoop, window::WindowBuilder};
 
-const DEFAULT_WINDOW_TITLE: &'static str = "";
+const DEFAULT_WINDOW_TITLE: &'static str = "Overtone Test";
 const DEFAULT_WINDOW_SIZE: (i32, i32) = (640, 360);
 
 #[tokio::main]
@@ -39,7 +39,13 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         }
 
         Event::RedrawRequested(window_id) if window_id == render_state.window().id() => {
+            // let t0 = std::time::Instant::now();
             render_state.request_redraw(control_flow);
+            // println!(
+            //     "Time elapsed: {:?}; Draw per Second: {}",
+            //     t0.elapsed(),
+            //     (t0.elapsed().as_millis() as f32) / 60000.0
+            // )
         }
 
         //Event::MainEventsCleared => render_state.request_window_redraw(),
