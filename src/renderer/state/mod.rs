@@ -9,9 +9,7 @@ use super::{
     device::{
         create_instance, create_surface, get_adapter, get_default_surface_configuration,
         get_device, get_surface_format,
-    },
-    main_shader::{get_main_shader, ProgramUniforms},
-    text::TextRenderer,
+    }, formats::vertex::{InstanceData, Vertex}, main_shader::{get_main_shader, ProgramUniforms}, text::TextRenderer
 };
 use winit::{
     event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -21,22 +19,23 @@ use winit::{
 
 /// Wrapper responsible for holding / handling the program's user interfac
 /// and broadcasting events to the underlying API.
-pub struct ProgramRenderingState {
+pub struct RenderingEngine {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub surface_config: wgpu::SurfaceConfiguration,
     pub render_pipeline: wgpu::RenderPipeline,
     pub global_uniforms: ProgramUniforms,
-    pub uniform_bind_group: wgpu::BindGroup,
-    pub uniform_buffer: wgpu::Buffer,
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
-    pub instance_buffer: wgpu::Buffer,
-    pub vertex_count: u32,
-    pub index_count: u32,
-    pub instance_count: u32,
+    pub global_uniform_bind_group: wgpu::BindGroup,
+    pub global_uniform_buffer: wgpu::Buffer,
+    pub prim_vertex_buffer: wgpu::Buffer,
+    pub prim_index_buffer: wgpu::Buffer,
+    pub prim_instance_buffer: wgpu::Buffer,
+    pub prim_instances: Vec<InstanceData>,
+    pub prim_mesh: (&'static [Vertex], &'static [u16]),
 
+    // Text Renderer module for rendering rich text.
+    // TODO: Inline layout might use text? Idk?
     pub text_renderer: TextRenderer,
 
     // Must be dropped *after* `self::surface`.
@@ -46,7 +45,7 @@ pub struct ProgramRenderingState {
     pub window_size: winit::dpi::PhysicalSize<u32>,
 }
 
-impl ProgramRenderingState {
+impl RenderingEngine {
     pub async fn new(window: Window) -> Result<Self, Box<dyn Error>> {
         let window_size = window.inner_size();
         let instance = create_instance();
@@ -59,24 +58,20 @@ impl ProgramRenderingState {
         let config =
             get_default_surface_configuration(surface_format, window_size, surface_capabilities);
         let shader = device.create_shader_module(get_main_shader());
-        let uniforms = ProgramUniforms {
-            window_size: [[0.0; 4]; 4],
-            camera_position: [0.0, 0.0, 0.0, 0.0],
-        };
+        let uniforms = ProgramUniforms::default();
         let uniform_buffer = create_uniform_buffer(&uniforms, &device);
         let uniform_bind_group_layout = create_uniform_bind_group_layout(&device);
         let uniform_bind_group =
             create_uniform_bind_group(&uniform_bind_group_layout, &uniform_buffer, &device);
-        let test_render_data = get_vertices();
+        let primitive_mesh = get_quad_mesh();
         let (vertex_buffer, index_buffer, instance_buffer) =
-            create_test_buffers(&test_render_data, &device);
-        let vertex_count = test_render_data.0.len() as u32;
-        let index_count = test_render_data.1.len() as u32;
-        let instance_count = test_render_data.2.len() as u32;
+            create_primitive_mesh_buffers(&primitive_mesh, &device);
         let render_pipeline =
             create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
         let text_renderer = TextRenderer::new(&device, &queue, surface_format);
+
+        let prim_instances = Vec::new();
 
         Ok(Self {
             window,
@@ -87,15 +82,14 @@ impl ProgramRenderingState {
             window_size,
             render_pipeline,
             global_uniforms: uniforms,
-            uniform_bind_group,
-            uniform_buffer,
-            vertex_buffer,
-            index_buffer,
-            instance_buffer,
-            vertex_count,
-            index_count,
-            instance_count,
+            global_uniform_bind_group: uniform_bind_group,
+            global_uniform_buffer: uniform_buffer,
+            prim_vertex_buffer: vertex_buffer,
+            prim_index_buffer: index_buffer,
+            prim_instance_buffer: instance_buffer,
+            prim_mesh: primitive_mesh,
             text_renderer,
+            prim_instances
         })
     }
 
@@ -130,94 +124,42 @@ impl ProgramRenderingState {
             WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
                 self.resize_window(**new_inner_size)
             }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Space),
-                        ..
-                    },
-                ..
-            } => self.update(),
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Left),
-                        ..
-                    },
-                ..
-            } => {
-                self.global_uniforms.camera_position[0] -= 16.0;
-                self.update();
-            }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Right),
-                        ..
-                    },
-                ..
-            } => {
-                self.global_uniforms.camera_position[0] += 16.0;
-                self.update();
-            }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Up),
-                        ..
-                    },
-                ..
-            } => {
-                self.global_uniforms.camera_position[1] -= 16.0;
-                self.update();
-            }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state: ElementState::Pressed,
-                        virtual_keycode: Some(VirtualKeyCode::Down),
-                        ..
-                    },
-                ..
-            } => {
-                self.global_uniforms.camera_position[1] += 16.0;
-                self.update();
-            }
             _ => return false,
         }
 
         true
     }
 
+    /** Sends the uniform to the GPU. */
     fn send_uniforms(&mut self) {
         self.queue.write_buffer(
-            &self.uniform_buffer,
+            &self.global_uniform_buffer,
             0,
             bytemuck::cast_slice(&[self.global_uniforms]),
         );
     }
 
+    /** Updates the engine state and rerenders it to screen. */
     pub fn update(&mut self) {
         let _ = self.render();
     }
 
-    pub fn calc_wgpu_to_px_matrix(&self) -> [[f32; 4]; 4] {
-        return [
-            [2.0 / self.window_size.width as f32, 0.0, 0.0, 0.0],
-            [0.0, -2.0 / self.window_size.height as f32, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [-1.0, 1.0, 0.0, 1.],
-        ];
+    pub fn push_raw_primitives(&mut self, primitive_instances: &Vec<InstanceData>) {
+        self.prim_instances.clear();
+        self.prim_instances.clone_from(&primitive_instances);
+        
+        self.queue.write_buffer(&self.prim_instance_buffer, 0, bytemuck::cast_slice(&self.prim_instances[..]));
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        self.global_uniforms.window_size = self.calc_wgpu_to_px_matrix();
+        // Update all the render-related uniforms.
+        self.global_uniforms.window_size = calc_px_to_wgpu_matrix(
+            self.window_size.width as f32,
+            self.window_size.height as f32
+        );
         self.send_uniforms();
 
+        // Render to the current texture.
         let render_target = self.surface.get_current_texture()?;
         let view = render_target
             .texture
@@ -228,14 +170,7 @@ impl ProgramRenderingState {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
-        {
-            self.text_renderer.prepare(
-                &self.window,
-                &self.queue,
-                &self.device,
-                &self.surface_config,
-            );
-        }
+        
 
         let mut render_pass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
@@ -257,20 +192,33 @@ impl ProgramRenderingState {
             timestamp_writes: None,
         });
 
-        /* Render the different kinds of primitives, as efficientyl as possible. */
+        /* Render all the basic primitives on a single draw call. */
         render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-        render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.draw_indexed(0..(self.index_count as _), 0, 0..(self.instance_count as _));
+        render_pass.set_bind_group(0, &self.global_uniform_bind_group, &[]);
+        render_pass.set_vertex_buffer(0, self.prim_vertex_buffer.slice(..));
+        render_pass.set_vertex_buffer(1, self.prim_instance_buffer.slice(..));
+        render_pass.set_index_buffer(self.prim_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+        // TODO: Render spans of primitives instead of all of them.
+        render_pass.draw_indexed(0..(self.prim_mesh.1.len() as _), 0, 0..(self.prim_instances.len() as _));
+
         /* Here, many other things can be plugged in to draw */
         // TODO: Handle text rendering error!
-        let _ = self.text_renderer.render(&mut render_pass);
+        // CLIP
+
+        self.text_renderer.prepare(
+            &self.queue,
+            &self.device,
+            &self.surface_config,
+            self.window_size.width, self.window_size.height
+        ).expect("Could not prepare text???");
+        self.text_renderer.render(&mut render_pass).expect("Could not render text???");
         /* Pluging space end */
 
         drop(render_pass);
         self.queue.submit(std::iter::once(cmd_encoder.finish()));
+
+        // Present the final result to the screen.
+        // TODO: Maybe in case of partial rendering it won't present to the screen.
         render_target.present();
         Ok(())
     }

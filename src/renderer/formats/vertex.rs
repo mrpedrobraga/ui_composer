@@ -6,7 +6,7 @@ use wgpu::vertex_attr_array;
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Vertex {
     pub position: [f32; 3],
-    pub color: [f32; 4],
+    pub uv: [f32; 2],
 }
 
 #[repr(C)]
@@ -20,7 +20,7 @@ const VERTEX_SIZE: wgpu::BufferAddress = std::mem::size_of::<Vertex>() as wgpu::
 
 const VERTEX_ATTRIBUTES: [wgpu::VertexAttribute; 2] = vertex_attr_array![
     0 => Float32x3,
-    1 => Float32x4
+    1 => Float32x2
 ];
 
 impl Vertex {

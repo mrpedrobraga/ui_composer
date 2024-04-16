@@ -5,6 +5,16 @@ use crate::renderer::{
     main_shader::ProgramUniforms,
 };
 
+/** Converts from px to wgpu matrix. */
+pub fn calc_px_to_wgpu_matrix(width: f32, height: f32) -> [[f32; 4]; 4] {
+    return [
+        [2.0 / width, 0.0, 0.0, 0.0],
+        [0.0, -2.0 / height, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [-1.0, 1.0, 0.0, 1.],
+    ];
+}
+
 pub fn create_uniform_bind_group(
     layout: &wgpu::BindGroupLayout,
     buffer: &wgpu::Buffer,
@@ -50,8 +60,8 @@ pub fn create_uniform_buffer(uniforms: &ProgramUniforms, device: &wgpu::Device) 
     uniform_buffer
 }
 
-pub fn create_test_buffers(
-    data: &(&[Vertex], &[u16], Vec<InstanceData>),
+pub fn create_primitive_mesh_buffers(
+    data: &(&[Vertex], &[u16]),
     device: &wgpu::Device,
 ) -> (wgpu::Buffer, wgpu::Buffer, wgpu::Buffer) {
     let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -66,11 +76,18 @@ pub fn create_test_buffers(
         usage: wgpu::BufferUsages::INDEX,
     });
 
-    let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Main Instance Buffer"),
-        contents: bytemuck::cast_slice(&data.2[..]),
-        usage: wgpu::BufferUsages::VERTEX,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        size: 512,
+        mapped_at_creation: false
     });
+    
+    //.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    //    label: Some("Main Instance Buffer"),
+    //    contents: bytemuck::cast_slice::<InstanceData, _>(&[]),
+    //    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+    //});
 
     (vertex_buffer, index_buffer, instance_buffer)
 }

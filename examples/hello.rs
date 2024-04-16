@@ -1,10 +1,21 @@
-use std::error::Error;
+use std::{error::Error, rc::Rc, sync::{Arc, Mutex}};
 
-use ui_composer::renderer::state::ProgramRenderingState;
-use winit::{dpi::LogicalSize, event::Event, event_loop::EventLoop, window::WindowBuilder};
+use ui_composer::{
+    renderer::{
+        formats::vertex::InstanceData,
+        state::{content::to_linear_rgb, RenderingEngine},
+    },
+    ui::render,
+};
+use winit::{
+    dpi::LogicalSize,
+    event::{ElementState, Event, KeyboardInput, ScanCode, VirtualKeyCode, WindowEvent},
+    event_loop::EventLoop,
+    window::WindowBuilder,
+};
 
-const DEFAULT_WINDOW_TITLE: &'static str = "Overtone Test";
-const DEFAULT_WINDOW_SIZE: (i32, i32) = (640, 360);
+const INITIAL_WINDOW_TITLE: &'static str = "UI Composer App";
+const INITIAL_WINDOW_SIZE: (i32, i32) = (640, 360);
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -14,20 +25,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 fn make_main_window() -> WindowBuilder {
     WindowBuilder::new()
-        .with_title(DEFAULT_WINDOW_TITLE)
+        .with_title(INITIAL_WINDOW_TITLE)
         .with_inner_size(LogicalSize {
-            width: DEFAULT_WINDOW_SIZE.0,
-            height: DEFAULT_WINDOW_SIZE.1,
+            width: INITIAL_WINDOW_SIZE.0,
+            height: INITIAL_WINDOW_SIZE.1,
         })
 }
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
     let event_loop = EventLoop::new();
-
-    /* Render State */
     let window = make_main_window().build(&event_loop)?;
-    let mut render_state = ProgramRenderingState::new(window).await?;
+    let mut render_state = RenderingEngine::new(window).await?;
 
+    let u = Arc::new(Mutex::new(0.0));
+
+    let uu = u.clone();
     event_loop.run(move |event, _, control_flow| match event {
         Event::WindowEvent {
             ref event,
@@ -35,20 +47,56 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
         } => {
             if window_id == render_state.window().id() {
                 let _ = render_state.handle_input(event, control_flow);
+
+                match event {
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Space),
+                                ..
+                            },
+                        ..
+                    } => {
+                        let mut l = uu.lock().expect("Could not lock u mutex");
+                        *l += 1.0;
+                        render_state.push_raw_primitives(&get_instances(*l));
+                        render_state.request_redraw(control_flow);
+                    },
+                    _ => {}
+                }
             }
         }
 
+        // Redraws the screen when a redraw is requested by the OS.
+        // (Like, for example, when the screen is reshaped)
         Event::RedrawRequested(window_id) if window_id == render_state.window().id() => {
-            // let t0 = std::time::Instant::now();
             render_state.request_redraw(control_flow);
-            // println!(
-            //     "Time elapsed: {:?}; Draw per Second: {}",
-            //     t0.elapsed(),
-            //     (t0.elapsed().as_millis() as f32) / 60000.0
-            // )
         }
 
-        //Event::MainEventsCleared => render_state.request_window_redraw(),
         _ => {}
     })
+}
+
+fn rect(position: (f32, f32), size: (f32, f32), color: [f32; 4]) -> InstanceData {
+    InstanceData {
+        transform: [
+            [size.0, 0.0, 0.0, 0.0],
+            [0.0, size.1, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [position.0, position.1, 0.0, 1.0],
+        ],
+        color,
+    }
+}
+
+fn get_instances(u: f32) -> Vec<InstanceData> {
+    vec![
+        rect((0.0, 0.0), (640.0, 360.0), to_linear_rgb(0x101010)),
+        rect(
+            ((640.0 / 2.0) - 48.0 + 10.0 * u, 360.0 - 64.0),
+            (96.0, 32.0),
+            to_linear_rgb(0x00aaff),
+        ),
+    ]
 }
