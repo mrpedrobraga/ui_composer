@@ -3,6 +3,8 @@ use glyphon::{
     TextRenderer as GTextRenderer, Weight,
 };
 
+use super::state::render_module::RenderModule;
+
 const TEST_FONT: &[u8; 273900] = include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf");
 const TEST_FONT2: &[u8; 15920] = include_bytes!("../../../assets/fonts/Nayten Sans.ttf");
 
@@ -83,7 +85,7 @@ impl TextRenderer {
         aabb: (f32, f32, f32, f32),
     ) -> glyphon::Buffer {
         let mut bufferw =
-            glyphon::Buffer::new(&mut self.font_system, glyphon::Metrics::new(8.0, 8.0));
+            glyphon::Buffer::new(&mut self.font_system, glyphon::Metrics::new(12.0, 12.0));
 
         let attrs_normal = glyphon::Attrs::new()
             .family(glyphon::Family::Monospace)
@@ -92,61 +94,24 @@ impl TextRenderer {
         bufferw.set_size(&mut self.font_system, aabb.2, aabb.3);
         bufferw.set_rich_text(
             &mut self.font_system,
-            [
-                (
-                    "This is an example of font rendering with ",
-                    attrs_normal
-                ),
-                (
-                    "JetBrains Mono",
-                    glyphon::Attrs::new()
-                        .family(glyphon::Family::Monospace)
-                        .color(glyphon::Color::rgb(0x00, 0xAA, 0xFF)),
-                ),
-                (
-                    " which looks absolutely ",
-                    attrs_normal
-                ),
-                (
-                    "✨gorgeous✨",
-                    glyphon::Attrs::new()
-                        .family(glyphon::Family::Monospace)
-                        .style(glyphon::Style::Italic)
-                        .color(glyphon::Color::rgb(250, 230, 60)),
-                ),
-                (
-                    ".\n\n* And here is the lovely Nayten Sans (by benichi).\n\nنص مصمم لتخويف الأشخاص المتحيزين.",
-                    attrs_normal
-                ),
-            ],
-            glyphon::Shaping::Advanced,
+            [(
+                "This is a contrived example of UI Composer's capabilities regarding text rendering.\n\nSo, it uses Glyphon under the hood for text rendering (which uses cosmic-text for shaping, etagere for atlas-ing and wgpu middleware for rendering).", attrs_normal
+            )],
+            glyphon::Shaping::Basic
         );
         bufferw.set_wrap(&mut self.font_system, glyphon::Wrap::Word);
         bufferw.shape_until_scroll(&mut self.font_system);
 
-        let mut buffer =
-            glyphon::Buffer::new(&mut self.font_system, glyphon::Metrics::new(16.0, 16.0));
-
-        buffer.set_size(&mut self.font_system, 640.0, 360.0);
-        buffer.set_text(
-            &mut self.font_system,
-            "Isn't is such a beautiful night?",
-            glyphon::Attrs::new()
-                .family(glyphon::Family::SansSerif)
-                .weight(Weight::BOLD)
-                .color(glyphon::Color::rgb(50, 50, 50)),
-            glyphon::Shaping::Advanced,
-        );
-        buffer.set_wrap(&mut self.font_system, glyphon::Wrap::Word);
-        buffer.shape_until_scroll(&mut self.font_system);
-
         return bufferw;
     }
+}
 
-    pub fn render<'pass>(
+impl RenderModule for TextRenderer {
+    fn render<'pass>(
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
-    ) -> Result<(), glyphon::RenderError> {
-        self.gtext_renderer.render(&self.atlas, render_pass)
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.gtext_renderer.render(&self.atlas, render_pass)?;
+        Ok(())
     }
 }

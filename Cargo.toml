@@ -14,7 +14,7 @@ repository = "https://github.com/mrpedrobraga/ui-composer"
 futures-signals = "0.3.33"
 winit = { version = "0.28", features = [] }
 log = "0.4"
-wgpu = "0.18"
+wgpu = { version = "0.18", features = [ "glsl" ] }
 tokio = { version = "1", features = ["full"] }
 bytemuck = { version = "1.12", features = ["derive"] }
 glyphon = { version = "*" }

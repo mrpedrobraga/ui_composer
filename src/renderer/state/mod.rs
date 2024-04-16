@@ -1,9 +1,14 @@
 pub mod content;
+pub mod render_module;
 pub mod helpers;
 
 use content::*;
 use helpers::*;
-use std::error::Error;
+use std::{borrow::Borrow, error::Error, sync::{Arc, Mutex}};
+
+use crate::ui::render::{calc_px_to_wgpu_matrix, create_main_render_pipeline, create_uniform_bind_group, create_uniform_bind_group_layout, create_uniform_buffer};
+
+use self::render_module::RenderModule;
 
 use super::{
     device::{
@@ -17,8 +22,10 @@ use winit::{
     window::Window,
 };
 
-/// Wrapper responsible for holding / handling the program's user interfac
-/// and broadcasting events to the underlying API.
+pub type SharedRenderModule = Box<dyn RenderModule>;
+
+/// Wrapper responsible for holding/handling the program's user interface primitives
+/// and broadcasting events to the underlying rendering API.
 pub struct RenderingEngine {
     pub surface: wgpu::Surface,
     pub device: wgpu::Device,
@@ -28,15 +35,8 @@ pub struct RenderingEngine {
     pub global_uniforms: ProgramUniforms,
     pub global_uniform_bind_group: wgpu::BindGroup,
     pub global_uniform_buffer: wgpu::Buffer,
-    pub prim_vertex_buffer: wgpu::Buffer,
-    pub prim_index_buffer: wgpu::Buffer,
-    pub prim_instance_buffer: wgpu::Buffer,
-    pub prim_instances: Vec<InstanceData>,
-    pub prim_mesh: (&'static [Vertex], &'static [u16]),
 
-    // Text Renderer module for rendering rich text.
-    // TODO: Inline layout might use text? Idk?
-    pub text_renderer: TextRenderer,
+    pub render_modules: Vec<SharedRenderModule>,
 
     // Must be dropped *after* `self::surface`.
     // Since the surface refers to it in spite of
@@ -63,15 +63,11 @@ impl RenderingEngine {
         let uniform_bind_group_layout = create_uniform_bind_group_layout(&device);
         let uniform_bind_group =
             create_uniform_bind_group(&uniform_bind_group_layout, &uniform_buffer, &device);
-        let primitive_mesh = get_quad_mesh();
-        let (vertex_buffer, index_buffer, instance_buffer) =
-            create_primitive_mesh_buffers(&primitive_mesh, &device);
+        
         let render_pipeline =
             create_main_render_pipeline(&device, shader, &config, uniform_bind_group_layout);
 
-        let text_renderer = TextRenderer::new(&device, &queue, surface_format);
-
-        let prim_instances = Vec::new();
+        let render_modules = Vec::new();
 
         Ok(Self {
             window,
@@ -84,12 +80,7 @@ impl RenderingEngine {
             global_uniforms: uniforms,
             global_uniform_bind_group: uniform_bind_group,
             global_uniform_buffer: uniform_buffer,
-            prim_vertex_buffer: vertex_buffer,
-            prim_index_buffer: index_buffer,
-            prim_instance_buffer: instance_buffer,
-            prim_mesh: primitive_mesh,
-            text_renderer,
-            prim_instances
+            render_modules,
         })
     }
 
@@ -119,15 +110,15 @@ impl RenderingEngine {
 
     pub fn handle_input(&mut self, event: &WindowEvent, control_flow: &mut ControlFlow) -> bool {
         match event {
-            WindowEvent::CloseRequested {} => *control_flow = ControlFlow::Exit,
-            WindowEvent::Resized(physical_size) => self.resize_window(*physical_size),
-            WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                self.resize_window(**new_inner_size)
-            }
+            
             _ => return false,
         }
 
         true
+    }
+
+    pub fn add_render_module (&mut self, render_module: SharedRenderModule) {
+        self.render_modules.push(render_module);
     }
 
     /** Sends the uniform to the GPU. */
@@ -142,13 +133,6 @@ impl RenderingEngine {
     /** Updates the engine state and rerenders it to screen. */
     pub fn update(&mut self) {
         let _ = self.render();
-    }
-
-    pub fn push_raw_primitives(&mut self, primitive_instances: &Vec<InstanceData>) {
-        self.prim_instances.clear();
-        self.prim_instances.clone_from(&primitive_instances);
-        
-        self.queue.write_buffer(&self.prim_instance_buffer, 0, bytemuck::cast_slice(&self.prim_instances[..]));
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
@@ -192,27 +176,13 @@ impl RenderingEngine {
             timestamp_writes: None,
         });
 
-        /* Render all the basic primitives on a single draw call. */
+        // /* Render all the basic primitives on a single draw call. */
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &self.global_uniform_bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.prim_vertex_buffer.slice(..));
-        render_pass.set_vertex_buffer(1, self.prim_instance_buffer.slice(..));
-        render_pass.set_index_buffer(self.prim_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        // TODO: Render spans of primitives instead of all of them.
-        render_pass.draw_indexed(0..(self.prim_mesh.1.len() as _), 0, 0..(self.prim_instances.len() as _));
-
-        /* Here, many other things can be plugged in to draw */
-        // TODO: Handle text rendering error!
-        // CLIP
-
-        self.text_renderer.prepare(
-            &self.queue,
-            &self.device,
-            &self.surface_config,
-            self.window_size.width, self.window_size.height
-        ).expect("Could not prepare text???");
-        self.text_renderer.render(&mut render_pass).expect("Could not render text???");
-        /* Pluging space end */
+        
+        for module in &self.render_modules {
+            module.render(&mut render_pass);
+        }
 
         drop(render_pass);
         self.queue.submit(std::iter::once(cmd_encoder.finish()));
