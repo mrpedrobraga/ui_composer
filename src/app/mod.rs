@@ -1,4 +1,4 @@
-use crate::renderer::state::{render_module::RenderModule, RenderingEngine, SharedRenderModule};
+use crate::renderer::engine::{render_module::RenderModule, render_engine::{RenderingEngine, SharedRenderModule}};
 use std::{error::Error, sync::{Arc, Mutex}};
 use winit::{event::WindowEvent, event_loop::EventLoop, window::Window};
 

@@ -3,7 +3,7 @@ use glyphon::{
     TextRenderer as GTextRenderer, Weight,
 };
 
-use super::state::render_module::RenderModule;
+use crate::renderer::engine::{render_engine::RenderingEngineGPU, render_module::RenderModule};
 
 const TEST_FONT: &[u8; 273900] = include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf");
 const TEST_FONT2: &[u8; 15920] = include_bytes!("../../../assets/fonts/Nayten Sans.ttf");
@@ -42,14 +42,14 @@ impl TextRenderer {
         }
     }
 
-    pub fn prepare(
+    pub fn prepare_text_areas(
         &mut self,
         queue: &wgpu::Queue,
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
-        clip_width: u32, clip_height: u32
+        window_width: u32, window_height: u32
     ) -> Result<(), glyphon::PrepareError> {
-        let buffer = &self.get_test_text_buffer("Hi", (0.0, 0.0, clip_width as f32, clip_height as f32));
+        let buffer = &self.get_test_text_buffer("Hi", (0.0, 0.0, window_width as f32, window_height as f32));
 
         let area = TextArea {
             buffer,
@@ -59,8 +59,8 @@ impl TextRenderer {
             bounds: TextBounds {
                 left: 0,
                 top: 0,
-                right: clip_width as i32,
-                bottom: clip_height as i32,
+                right: window_width as i32,
+                bottom: window_height as i32,
             },
             default_color: glyphon::Color::rgb(0xFF, 0xFF, 0xFF),
         };
@@ -107,6 +107,10 @@ impl TextRenderer {
 }
 
 impl RenderModule for TextRenderer {
+    fn prepare(&mut self, engine: &RenderingEngineGPU) {
+        self.prepare_text_areas(&engine.queue, &engine.device, &engine.surface_config, engine.window_size.width, engine.window_size.height);
+    }
+
     fn render<'pass>(
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,

@@ -1,7 +1,7 @@
 #![allow(unused, dead_code, non_snake_case)]
 
 use std::{error::Error, sync::{Arc, Mutex}};
-use ui_composer::{app::{UIApp, UIAppCreateDescriptor}, renderer::formats::vertex::InstanceData, ui::render::PrimitiveRenderModule};
+use ui_composer::{app::{UIApp, UIAppCreateDescriptor}, renderer::formats::vertex::InstanceData, renderer::modules::ui::PrimitiveRenderModule};
 use wgpu::Color;
 
 struct MyState {
@@ -25,8 +25,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     .await
     .expect("Could not build app for whatever reason.");
 
-    let mut primitive_module = Box::new(PrimitiveRenderModule::new(&ui_app.get_render_engine().device));
-    primitive_module.push_raw_primitives(&ui_app.get_render_engine().queue, &vec![
+    let mut primitive_module = Box::new(PrimitiveRenderModule::new(&ui_app.get_render_engine().gpu));
+    primitive_module.push_raw_primitives(&ui_app.get_render_engine().gpu, &vec![
         InstanceData {
             transform: [
                 [10.0, 0.0, 0.0, 0.0],

@@ -1,47 +1,95 @@
+use crate::renderer::{
+    engine::{self, render_engine::{RenderingEngine, RenderingEngineGPU}, render_module::RenderModule},
+    formats::vertex::{InstanceData, Vertex},
+};
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
-use crate::renderer::{formats::vertex::{InstanceData, Vertex}, main_shader::ProgramUniforms, state::render_module::RenderModule};
 
 pub struct PrimitiveRenderModule {
+    render_pipeline: wgpu::RenderPipeline,
     primitive_mesh: Mesh2D<'static>,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     instance_buffer: wgpu::Buffer,
-    instances: Vec<InstanceData>
+    instances: Vec<InstanceData>,
+    uniform_bind_group: wgpu::BindGroup,
+    uniform_buffer: wgpu::Buffer,
+    uniforms: PrimitiveRenderModuleUniforms,
 }
 
 impl PrimitiveRenderModule {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(gpu: &RenderingEngineGPU) -> Self {
         let primitive_mesh = get_quad_mesh();
         let (vertex_buffer, index_buffer, instance_buffer) =
-            create_primitive_mesh_buffers(&primitive_mesh, &device);
+            create_primitive_mesh_buffers(&primitive_mesh, &gpu.device);
         let instances = Vec::new();
+        let uniforms = PrimitiveRenderModuleUniforms::default();
+        let uniform_buffer = create_uniform_buffer(&uniforms, &gpu.device);
+        let uniform_bind_group_layout = create_uniform_bind_group_layout(&gpu.device);
+        let uniform_bind_group =
+            create_uniform_bind_group(&uniform_bind_group_layout, &uniform_buffer, &gpu.device);
+        let shader_descriptor = get_main_shader();
+        let shader = gpu.device.create_shader_module(get_main_shader());
+        let render_pipeline =
+            create_main_render_pipeline(&gpu.device, shader, &gpu.surface_config, uniform_bind_group_layout);
 
         Self {
+            render_pipeline,
             primitive_mesh,
             vertex_buffer,
             index_buffer,
             instance_buffer,
-            instances
+            instances,
+            uniforms,
+            uniform_buffer,
+            uniform_bind_group,
         }
     }
 
-    pub fn push_raw_primitives(&mut self, queue: &wgpu::Queue, primitive_instances: &Vec<InstanceData>) {
+    pub fn push_raw_primitives(
+        &mut self,
+        gpu: &RenderingEngineGPU,
+        primitive_instances: &Vec<InstanceData>,
+    ) {
         self.instances.clear();
         self.instances.clone_from(&primitive_instances);
-        
-        queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&self.instances[..]));
+
+        gpu.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&self.instances[..]),
+        );
     }
 }
 
 impl RenderModule for PrimitiveRenderModule {
-    fn render<'pass>(&'pass self, render_pass: &mut wgpu::RenderPass<'pass>) -> Result<(), Box<dyn std::error::Error>> {
-        //render_pass.set_pipeline(&self.render_pipeline);
-        //render_pass.set_bind_group(0, &self.global_uniform_bind_group, &[]);
+    fn prepare(&mut self, engine: &RenderingEngineGPU) {
+        self.uniforms.window_size = calc_px_to_wgpu_matrix(
+            engine.window_size.width as f32,
+            engine.window_size.height as f32
+        );
+
+        engine.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::cast_slice(&[self.uniforms]),
+        );
+    }
+
+    fn render<'pass>(
+        &'pass self,
+        render_pass: &mut wgpu::RenderPass<'pass>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        render_pass.set_pipeline(&self.render_pipeline);
+        render_pass.set_bind_group(0, &self.uniform_bind_group, &[]);
         render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
         render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-        render_pass.draw_indexed(0..(self.primitive_mesh.1.len() as _), 0, 0..(self.instances.len() as _));
+        render_pass.draw_indexed(
+            0..(self.primitive_mesh.1.len() as _),
+            0,
+            0..(self.instances.len() as _),
+        );
 
         Ok(())
     }
@@ -86,7 +134,6 @@ pub fn to_linear_rgb(c: u32) -> [f32; 4] {
     [f(c >> 16), f(c >> 8), f(c), 1.0]
 }
 
-
 /** Converts from px to wgpu matrix. */
 pub fn calc_px_to_wgpu_matrix(width: f32, height: f32) -> [[f32; 4]; 4] {
     return [
@@ -95,6 +142,29 @@ pub fn calc_px_to_wgpu_matrix(width: f32, height: f32) -> [[f32; 4]; 4] {
         [0.0, 0.0, 1.0, 0.0],
         [-1.0, 1.0, 0.0, 1.],
     ];
+}
+
+pub fn get_main_shader() -> wgpu::ShaderModuleDescriptor<'static> {
+    wgpu::ShaderModuleDescriptor {
+        label: Some("Main Shader"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("./main.wgsl").into()),
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct PrimitiveRenderModuleUniforms {
+    pub window_size: [[f32; 4]; 4],
+    pub camera_position: [f32; 4],
+}
+
+impl Default for PrimitiveRenderModuleUniforms {
+    fn default() -> Self {
+        Self {
+            window_size: Default::default(),
+            camera_position: Default::default(),
+        }
+    }
 }
 
 pub fn create_uniform_bind_group(
@@ -132,7 +202,10 @@ pub fn create_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGrou
     layout
 }
 
-pub fn create_uniform_buffer(uniforms: &ProgramUniforms, device: &wgpu::Device) -> wgpu::Buffer {
+pub fn create_uniform_buffer(
+    uniforms: &PrimitiveRenderModuleUniforms,
+    device: &wgpu::Device,
+) -> wgpu::Buffer {
     let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Primitive Index Buffer"),
         contents: bytemuck::cast_slice(&[*uniforms]),
@@ -162,9 +235,9 @@ pub fn create_primitive_mesh_buffers(
         label: Some("Primitive Instance Buffer"),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         size: 512,
-        mapped_at_creation: false
+        mapped_at_creation: false,
     });
-    
+
     //.create_buffer_init(&wgpu::util::BufferInitDescriptor {
     //    label: Some("Primitive Instance Buffer"),
     //    contents: bytemuck::cast_slice::<InstanceData, _>(&[]),
