@@ -1,7 +1,8 @@
 #![allow(unused, dead_code, non_snake_case)]
 
 use std::{error::Error, sync::{Arc, Mutex}};
-use ui_composer::{app::{UIApp, UIAppCreateDescriptor}, renderer::formats::vertex::InstanceData, renderer::modules::ui::PrimitiveRenderModule};
+use glyphon::TextRenderer;
+use ui_composer::{app::{UIApp, UIAppCreateDescriptor}, renderer::{formats::vertex::InstanceData, modules::{text::TextRenderModule, ui::PrimitiveRenderModule}}};
 use wgpu::Color;
 
 struct MyState {
@@ -29,15 +30,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     primitive_module.push_raw_primitives(&ui_app.get_render_engine().gpu, &vec![
         InstanceData {
             transform: [
-                [10.0, 0.0, 0.0, 0.0],
-                [0.0, 10.0, 0.0, 0.0],
+                [30.0, 0.0, 0.0, 0.0],
+                [0.0, 30.0, 0.0, 0.0],
                 [0.0, 0.0, 1.0, 0.0],
-                [0.0, 0.0, 0.0, 1.0],
+                [20.0, 20.0, 0.6, 1.0],
             ],
             color: [0.0, 0.6, 1.0, 1.0],
+        },
+        InstanceData {
+            transform: [
+                [30.0, 0.0, 0.0, 0.0],
+                [0.0, 30.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [30.0, 30.0, 0.4, 1.0],
+            ],
+            color: [1.0, 0.6, 1.0, 1.0],
         }
     ]);
     ui_app.add_render_module(primitive_module);
+
+    let mut text_module = Box::new(TextRenderModule::new(&ui_app.get_render_engine().gpu));
+    ui_app.add_render_module(text_module);
 
     //ui_app.add_text_rendering_engine();
     //ui_app.load_font_data( TEST_FONT.into() );

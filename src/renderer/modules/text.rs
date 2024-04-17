@@ -8,18 +8,16 @@ use crate::renderer::engine::{render_engine::RenderingEngineGPU, render_module::
 const TEST_FONT: &[u8; 273900] = include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf");
 const TEST_FONT2: &[u8; 15920] = include_bytes!("../../../assets/fonts/Nayten Sans.ttf");
 
-pub struct TextRenderer {
+pub struct TextRenderModule {
     gtext_renderer: GTextRenderer,
     cache: SwashCache,
     atlas: TextAtlas,
     font_system: FontSystem,
 }
 
-impl TextRenderer {
+impl TextRenderModule {
     pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        swapchain_format: wgpu::TextureFormat,
+        gpu: &RenderingEngineGPU
     ) -> Self {
         let mut font_system = FontSystem::new();
 
@@ -30,9 +28,15 @@ impl TextRenderer {
         font_system.db_mut().set_sans_serif_family("Nayten Sans");
 
         let cache = SwashCache::new();
-        let mut atlas: TextAtlas = TextAtlas::new(device, queue, swapchain_format);
+        let mut atlas: TextAtlas = TextAtlas::new(&gpu.device, &gpu.queue, gpu.surface_config.format);
+
         let text_renderer =
-            GTextRenderer::new(&mut atlas, device, wgpu::MultisampleState::default(), None);
+            GTextRenderer::new(
+                &mut atlas,
+                &gpu.device,
+                wgpu::MultisampleState::default(),
+                None
+            );
 
         Self {
             gtext_renderer: text_renderer,
@@ -106,7 +110,7 @@ impl TextRenderer {
     }
 }
 
-impl RenderModule for TextRenderer {
+impl RenderModule for TextRenderModule {
     fn prepare(&mut self, engine: &RenderingEngineGPU) {
         self.prepare_text_areas(&engine.queue, &engine.device, &engine.surface_config, engine.window_size.width, engine.window_size.height);
     }
