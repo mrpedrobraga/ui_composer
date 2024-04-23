@@ -2,6 +2,7 @@ use crate::renderer::engine::{render_module::RenderModule, render_engine::{Rende
 use std::{error::Error, sync::{Arc, Mutex}};
 use winit::{event::WindowEvent, event_loop::EventLoop, window::Window};
 
+pub mod app_builder;
 /// A user interface app, everything necessary for rendering UI from state.
 pub struct UIApp<TState> {
     pub state: TState,
@@ -11,14 +12,14 @@ pub struct UIApp<TState> {
 
 /// Descriptor for creating a new UI App.
 pub struct UIAppCreateDescriptor {
-    pub initial_window_title: &'static str,
+    pub initial_window_title: String,
     pub initial_window_size: (i32, i32),
 }
 
 impl Default for UIAppCreateDescriptor {
     fn default() -> Self {
         Self {
-            initial_window_title: "UI Composer App",
+            initial_window_title: "UI Composer App".to_owned(),
             initial_window_size: (640, 360),
         }
     }
@@ -37,6 +38,7 @@ impl<TState> UIApp<TState> {
                 width: descriptor.initial_window_size.0,
                 height: descriptor.initial_window_size.1,
             })
+            .with_visible(false)
             .build(&event_loop)?;
         let render_engine = RenderingEngine::new(window).await?;
 
@@ -66,6 +68,8 @@ impl<TState> UIApp<TState> {
     /// At this stage, you can no longer directly interact with the app from the outside,
     /// so make sure to set all the input handlers and state you might want *inside* it.
     pub async fn run(mut self) -> Result<(), Box<dyn Error>> {
+        self.render_engine.window().set_visible(true);
+
         self.event_loop
             .run(move |event, _, mut control_flow| match event {
                 winit::event::Event::WindowEvent {

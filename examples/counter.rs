@@ -1,9 +1,12 @@
-#![allow(unused, dead_code, non_snake_case)]
+#![allow(dead_code, non_snake_case)]
 
-use std::{error::Error, sync::{Arc, Mutex}};
-use glyphon::TextRenderer;
-use ui_composer::{app::{UIApp, UIAppCreateDescriptor}, renderer::{formats::vertex::InstanceData, modules::{text::TextRenderModule, ui::PrimitiveRenderModule}}};
-use wgpu::Color;
+use std::error::Error;
+use ui_composer::prelude::*;
+use ui_composer::renderer::modules::ui::to_linear_rgb;
+use ui_composer::renderer::{
+    formats::vertex::InstanceData,
+    modules::ui::PrimitiveRenderModule,
+};
 
 struct MyState {
     pub counter: i32,
@@ -16,46 +19,50 @@ const TEST_FONT2: &[u8; 15920] = include_bytes!("../assets/fonts/Nayten Sans.ttf
 async fn main() -> Result<(), Box<dyn Error>> {
     let initial_state = MyState { counter: 0 };
 
-    let mut ui_app = UIApp::new(
-        initial_state,
-        UIAppCreateDescriptor {
-            initial_window_title: "Counter",
-            initial_window_size: (320, 480),
-        },
-    )
-    .await
-    .expect("Could not build app for whatever reason.");
+    let mut app = UIAppBuilder::new(initial_state)
+        .with_window_title("My Window".to_owned())
+        .with_window_size((300, 300))
+        .build()
+        .await?;
 
-    let mut primitive_module = Box::new(PrimitiveRenderModule::new(&ui_app.get_render_engine().gpu));
-    primitive_module.push_raw_primitives(&ui_app.get_render_engine().gpu, &vec![
-        InstanceData {
-            transform: [
-                [30.0, 0.0, 0.0, 0.0],
-                [0.0, 30.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [20.0, 20.0, 0.6, 1.0],
-            ],
-            color: [0.0, 0.6, 1.0, 1.0],
-        },
-        InstanceData {
-            transform: [
-                [30.0, 0.0, 0.0, 0.0],
-                [0.0, 30.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.0],
-                [30.0, 30.0, 0.4, 1.0],
-            ],
-            color: [1.0, 0.6, 1.0, 1.0],
-        }
-    ]);
-    ui_app.add_render_module(primitive_module);
+    let mut primitive_module = Box::new(PrimitiveRenderModule::new(&app));
 
-    let mut text_module = Box::new(TextRenderModule::new(&ui_app.get_render_engine().gpu));
-    ui_app.add_render_module(text_module);
+    // TODO: It should be possible to communicate with this module 
+    // from some higher level API.
+    primitive_module.push_raw_primitives(
+        &app.get_render_engine().gpu,
+        &get_test_instance_data()
+    );
+    
+    app.add_render_module(primitive_module);
 
-    //ui_app.add_text_rendering_engine();
-    //ui_app.load_font_data( TEST_FONT.into() );
-
-    ui_app.run().await?;
+    app.run().await?;
 
     Ok(())
+}
+
+fn get_test_instance_data() -> Vec<InstanceData> {
+    vec![
+        InstanceData {
+            transform: rect([0.0, 0.0, 0.999], [300.0, 300.0]),
+            color: to_linear_rgb(0xdedede),
+        },
+        InstanceData {
+            transform: rect([(300.0-96.0-4.0)/2.0, 300.0-32.0-16.0+4.0, 0.91], [96.0+4.0, 32.0]),
+            color: to_linear_rgb(0xa0a0a0),
+        },
+        InstanceData {
+            transform: rect([(300.0-96.0)/2.0, 300.0-32.0-16.0, 0.9], [96.0, 32.0]),
+            color: to_linear_rgb(0xee2244),
+        },
+    ]
+}
+
+fn rect(position: [f32; 3], size: [f32; 2]) -> [[f32; 4]; 4] {
+    [
+        [size[0], 0.0, 0.0, 0.0],
+        [0.0, size[1], 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [position[0], position[1], position[2], 1.0]
+    ]
 }

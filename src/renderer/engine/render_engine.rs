@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use wgpu::{RenderPassDepthStencilAttachment, Texture, TextureUsages, TextureViewDescriptor};
 use winit::{
     event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::ControlFlow,
@@ -24,6 +25,7 @@ pub struct RenderingEngineGPU {
     pub queue: wgpu::Queue,
     pub surface: wgpu::Surface,
     pub surface_config: wgpu::SurfaceConfiguration,
+    pub depth_buffer: wgpu::Texture,
     // Must be dropped *after* `self::surface`.
     // Since the surface refers to it in spite of
     // the borrow checker.
@@ -41,9 +43,10 @@ impl RenderingEngine {
         let surface_capabilities = surface.get_capabilities(&adapter);
         // Assuming sRGB for now...
         let surface_format = get_surface_format(&surface_capabilities);
-        let config =
+        let surface_config =
             get_default_surface_configuration(surface_format, window_size, surface_capabilities);
         let render_modules = Vec::new();
+        let depth_buffer = RenderingEngine::create_depth_texture(&device, &surface_config);
 
         Ok(Self {
             gpu: RenderingEngineGPU {
@@ -51,8 +54,9 @@ impl RenderingEngine {
                 surface,
                 device,
                 queue,
-                surface_config: config,
+                surface_config,
                 window_size,
+                depth_buffer,
             },
             render_modules,
         })
@@ -66,6 +70,23 @@ impl RenderingEngine {
         self.gpu.surface.configure(&self.gpu.device, &self.gpu.surface_config)
     }
 
+    pub fn create_depth_texture(device: &wgpu::Device, surface_config: &wgpu::SurfaceConfiguration) -> wgpu::Texture {
+        device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Depth Buffer"),
+            size: wgpu::Extent3d {
+                width: surface_config.width,
+                height: surface_config.height,
+                depth_or_array_layers: 1
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            view_formats: &[],
+            usage: TextureUsages::RENDER_ATTACHMENT
+        })
+    }
+
     pub fn resize_window(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
         if !(new_size.width > 0 && new_size.height > 0) {
             return;
@@ -75,7 +96,8 @@ impl RenderingEngine {
         self.gpu.surface_config.width = new_size.width;
         self.gpu.surface_config.height = new_size.height;
 
-        self.reconfigure_surface()
+        self.reconfigure_surface();
+        self.gpu.depth_buffer = RenderingEngine::create_depth_texture(&self.gpu.device, &self.gpu.surface_config)
     }
 
     pub fn request_window_redraw(&mut self) {
@@ -102,9 +124,10 @@ impl RenderingEngine {
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         // Render to the current texture.
         let render_target = self.gpu.surface.get_current_texture()?;
-        let view = render_target
+        let main_texture_view = render_target
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
+        let depth_texture_view = self.gpu.depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut cmd_encoder = self.gpu.device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -114,30 +137,34 @@ impl RenderingEngine {
         let mut render_pass = cmd_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view: &main_texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.02,
-                        g: 0.02,
-                        b: 0.02,
+                        r: 1.0,
+                        g: 1.0,
+                        b: 1.0,
                         a: 1.0,
                     }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &depth_texture_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store
+                }),
+                stencil_ops: None
+            }),
             occlusion_query_set: None,
             timestamp_writes: None,
         });
 
-        // /* Render all the basic primitives on a single draw call. */
-        // render_pass.set_pipeline(&self.render_pipeline);
-        // render_pass.set_bind_group(0, &self.global_uniform_bind_group, &[]);
-
         for module in self.render_modules.iter_mut() {
-            module.prepare(&self.gpu);
-            module.render(&mut render_pass);
+            module.prepare_to_render(&self.gpu);
+            module.commit_render(&mut render_pass);
+            break;
         }
 
         drop(render_pass);

@@ -7,7 +7,7 @@ use super::render_engine::RenderingEngineGPU;
 /// Things rendered to the screen will possibly interact with other previously
 /// rendered things.
 pub trait RenderModule {
-    fn prepare(&mut self, engine: &RenderingEngineGPU);
+    fn prepare_to_render(&mut self, engine: &RenderingEngineGPU);
 
-    fn render<'pass>(&'pass self, render_pass: &mut RenderPass<'pass>) -> Result<(), Box<dyn Error>>;
+    fn commit_render<'pass>(&'pass self, render_pass: &mut RenderPass<'pass>) -> Result<(), Box<dyn Error>>;
 }

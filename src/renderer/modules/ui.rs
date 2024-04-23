@@ -1,7 +1,7 @@
-use crate::renderer::{
+use crate::{app::UIApp, renderer::{
     engine::{self, render_engine::{RenderingEngine, RenderingEngineGPU}, render_module::RenderModule},
     formats::vertex::{InstanceData, Vertex},
-};
+}};
 use wgpu::{util::DeviceExt, SurfaceConfiguration};
 
 pub struct PrimitiveRenderModule {
@@ -17,7 +17,8 @@ pub struct PrimitiveRenderModule {
 }
 
 impl PrimitiveRenderModule {
-    pub fn new(gpu: &RenderingEngineGPU) -> Self {
+    pub fn new<T>(app: &UIApp<T>) -> Self {
+        let gpu = &app.get_render_engine().gpu;
         let primitive_mesh = get_quad_mesh();
         let (vertex_buffer, index_buffer, instance_buffer) =
             create_primitive_mesh_buffers(&primitive_mesh, &gpu.device);
@@ -62,7 +63,7 @@ impl PrimitiveRenderModule {
 }
 
 impl RenderModule for PrimitiveRenderModule {
-    fn prepare(&mut self, engine: &RenderingEngineGPU) {
+    fn prepare_to_render(&mut self, engine: &RenderingEngineGPU) {
         self.uniforms.window_size = calc_px_to_wgpu_matrix(
             engine.window_size.width as f32,
             engine.window_size.height as f32
@@ -75,7 +76,7 @@ impl RenderModule for PrimitiveRenderModule {
         );
     }
 
-    fn render<'pass>(
+    fn commit_render<'pass>(
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -140,14 +141,14 @@ pub fn calc_px_to_wgpu_matrix(width: f32, height: f32) -> [[f32; 4]; 4] {
         [2.0 / width, 0.0, 0.0, 0.0],
         [0.0, -2.0 / height, 0.0, 0.0],
         [0.0, 0.0, 1.0, 0.0],
-        [-1.0, 1.0, 0.0, 1.],
+        [-1.0, 1.0, 0.0, 1.0],
     ];
 }
 
 pub fn get_main_shader() -> wgpu::ShaderModuleDescriptor<'static> {
     wgpu::ShaderModuleDescriptor {
         label: Some("Main Shader"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("./main.wgsl").into()),
+        source: wgpu::ShaderSource::Wgsl(include_str!("./ui_primitives.wgsl").into()),
     }
 }
 
@@ -234,7 +235,7 @@ pub fn create_primitive_mesh_buffers(
     let instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Primitive Instance Buffer"),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        size: 512,
+        size: 1048576,
         mapped_at_creation: false,
     });
 
@@ -285,7 +286,13 @@ pub fn create_main_render_pipeline(
             unclipped_depth: false,
             conservative: false,
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default()
+        }),
         multisample: wgpu::MultisampleState {
             count: 1,
             mask: !0, /*All masks*/

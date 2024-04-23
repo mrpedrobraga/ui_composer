@@ -111,11 +111,11 @@ impl TextRenderModule {
 }
 
 impl RenderModule for TextRenderModule {
-    fn prepare(&mut self, engine: &RenderingEngineGPU) {
+    fn prepare_to_render(&mut self, engine: &RenderingEngineGPU) {
         self.prepare_text_areas(&engine.queue, &engine.device, &engine.surface_config, engine.window_size.width, engine.window_size.height);
     }
 
-    fn render<'pass>(
+    fn commit_render<'pass>(
         &'pass self,
         render_pass: &mut wgpu::RenderPass<'pass>,
     ) -> Result<(), Box<dyn std::error::Error>> {
